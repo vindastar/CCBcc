@@ -3,9 +3,16 @@ package com.chaye.ccbcc;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.telephony.PhoneStateListener;
+import android.telephony.ServiceState;
+import android.telephony.SignalStrength;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
+import android.telephony.TelephonyManager;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
@@ -24,6 +31,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -276,6 +284,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 startGetdata();
                 buttonStart.setVisibility(View.GONE);
                 buttonStop.setVisibility(View.VISIBLE);
+                listenerSignal(this);
                 break;
             case R.id.buttonStop:
                 isRun = false;
@@ -285,4 +294,45 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
         }
     }
+    public TelephonyManager telephoneManager;
+    public PhoneStateListener phoneStateListener;
+
+    public void listenerSignal(Context context) {
+        telephoneManager = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+
+        phoneStateListener = new PhoneStateListener() {
+            @Override
+            public void onServiceStateChanged(ServiceState serviceState) {
+                Logger.debug("onServiceStateChanged++++");
+                super.onServiceStateChanged(serviceState);
+            }
+
+
+            @Override
+            public void onSignalStrengthsChanged(SignalStrength signalStrength) {
+                Logger.debug("onSignalStrengthsChanged++++");
+                super.onSignalStrengthsChanged(signalStrength);
+
+                int level = signalStrength.getLevel();//Call requires API level 23
+                int asu = getMethod(signalStrength, "getAsuLevel");//Hide
+                int dbm = getMethod(signalStrength, "getDbm");//Hide
+            }
+        };
+    }
+
+
+    int getMethod(SignalStrength signalStrength, String name) {
+        Class<?> clazz = signalStrength.getClass();
+        Method method = null;
+        int i = 0;
+        try {
+            method = clazz.getMethod(name);//getDbm
+            Object result = method.invoke(signalStrength);
+            i = Integer.parseInt(String.valueOf(result));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return i;
+    }
+
 }
