@@ -2,17 +2,24 @@ package com.chaye.ccbcc;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.NotificationCompat;
 
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
+import android.content.res.AssetFileDescriptor;
+import android.graphics.BitmapFactory;
+import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.telephony.PhoneStateListener;
 import android.telephony.ServiceState;
 import android.telephony.SignalStrength;
-import android.telephony.SubscriptionInfo;
-import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
+import android.text.method.ScrollingMovementMethod;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
@@ -28,6 +35,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -47,12 +55,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private TextView textViewData, tvserverjiang, tvGuanjianzi, tvShuliang, tvJiange;
     private Button buttonStart, buttonStop;
+    private final int NOTIFY_ID = 0x123;            //通知的ID
+    NotificationManager notificationManager;
+    NotificationCompat.Builder notification;
+    MediaPlayer mMediaPlayer;
+    AssetFileDescriptor afd;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         textViewData = findViewById(R.id.textViewData);
+        textViewData.setMovementMethod(ScrollingMovementMethod.getInstance());
         tvJiange = findViewById(R.id.jiange);
         tvserverjiang = findViewById(R.id.serverjiang);
         tvGuanjianzi = findViewById(R.id.guanjianzi);
@@ -61,12 +75,46 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         buttonStart.setOnClickListener(this);
         buttonStop = findViewById(R.id.buttonStop);
         buttonStop.setOnClickListener(this);
+        mMediaPlayer = new MediaPlayer();
+        try {
+            afd = getAssets().openFd("tipsringtone.mp3");
+            mMediaPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
+            mMediaPlayer.prepare();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        //获取通知管理器，用于发送通知
+        notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        notification = new NotificationCompat.Builder(MainActivity.this); // 创建一个Notification对象
+        // 设置打开该通知，该通知自动消失
+        notification.setAutoCancel(false);
+//         设置显示在状态栏的通知提示信息
+//        notification.setTicker("subtitle");
+        // 设置通知的小图标
+        notification.setSmallIcon(R.mipmap.ic_launcher);
+        //设置下拉列表中的大图标
+        notification.setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher));
+        // 设置通知内容的标题
+        notification.setContentTitle("普大喜奔日上");
+        // 设置通知内容
+        notification.setContentText("正在监控中");
+        //设置发送时间
+        notification.setWhen(System.currentTimeMillis());
+        // 创建一个启动其他Activity的Intent
+//        Intent intent = new Intent(MainActivity.this, MainActivity.class);
+//        PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 0, intent, 0);
+        //设置通知栏点击跳转
+//        notification.setContentIntent(pi);
+        //发送通知
+        notificationManager.notify(NOTIFY_ID, notification.build());
     }
 
     boolean isRun;
 
     //https://jxjkhd.kerlala.com/activity/duihuan/getDList/91/lPYDaE3N
-    String url = "https://jxjkhd.kerlala.com/activity/duihuan/getDList/91/lPYDaE3N/";
+//    String url = "https://jxjkhd.kerlala.com/activity/duihuan/getDList/91/lPYDaE3N/"; JIANHANG CCB
+    String rishangURL = "https://shfw.spdbccc.com.cn/api/shfw-mall/good/query-detail/"; // PU DA XI BEN, RISHANG YOUHUIQUAN
     Handler handler = new Handler() {
         @Override
         public void handleMessage(@NonNull Message msg) {
@@ -98,19 +146,35 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     buttonStop.setVisibility(View.GONE);
                     break;
                 case 4:
-                    tvserverjiang.setHint("满足条件了,但是你没写通知key,好亏啊");
+//                    tvserverjiang.setHint("满足条件了,但是你没写通知key,好亏啊");
+                    try {
+                        mMediaPlayer.start();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                     break;
             }
             super.handleMessage(msg);
         }
     };
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mMediaPlayer != null && mMediaPlayer.isPlaying()) {
+            mMediaPlayer.stop();
+        }
+    }
 
     public void startGetdata() {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                getData(url);
+                try {
+                    getDataByPOST(rishangURL);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         }).start();
 
@@ -120,7 +184,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     TimerTask timerTask = new TimerTask() {
         @Override
         public void run() {
-            getData(url);
+            try {
+                getDataByPOST(rishangURL);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     };
 
@@ -142,9 +210,137 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         return null;
     }
 
+    private static final String DEF_CHATSET = "UTF-8";
+    private static int DEF_CONN_TIMEOUT = 30000;
+
+    public static String doPOST(String strUrl) throws Exception {
+
+        String params = "{\"prodNo\":\"PF20220728000057\",\"canal\":\"2\"}";
+
+        HttpURLConnection conn = null;
+        BufferedReader reader = null;
+        String rs = null;
+        try {
+            StringBuffer sb = new StringBuffer();
+            URL url = new URL(strUrl);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setDoInput(true);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setUseCaches(false);
+            conn.setConnectTimeout(DEF_CONN_TIMEOUT);
+            conn.setInstanceFollowRedirects(false);
+            conn.connect();
+            DataOutputStream out = new DataOutputStream(conn.getOutputStream());
+            out.write(params.getBytes());
+            out.flush();
+            int code = conn.getResponseCode();
+            Logger.debug("doPOST postRequestCode: " + code);
+            InputStream is = conn.getInputStream();
+            reader = new BufferedReader(new InputStreamReader(is, DEF_CHATSET));
+            String strRead = null;
+            while ((strRead = reader.readLine()) != null) {
+                sb.append(strRead);
+            }
+            rs = sb.toString();
+        } catch (Exception e) {
+            e.printStackTrace();
+            // TODO: handle exception
+        } finally {
+            if (reader != null) {
+                reader.close();
+            }
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
+        Logger.debug("doPOST  " + rs);
+        return rs;
+    }
+
+
+    public void getDataByPOST(String url) {
+//        HttpPost httpPost = new HttpPost(url);
+//        CloseableHttpClient httpClient = HttpClients.createDefault();
+        String timestamp = System.currentTimeMillis() + "";
+//        String websiteDatetime = getWebsiteDatetime("http://www.baidu.com");
+//        httpPost.addHeader("Timestamp", timestamp);
+
+
+        try {
+//            CloseableHttpResponse response = httpClient.execute(httpPost);
+//            String responseJson = EntityUtils.toString(response.getEntity(), Charset.defaultCharset());
+            notification.setContentText("正在监控中");
+            //设置发送时间
+            notification.setWhen(System.currentTimeMillis());
+            notificationManager.notify(NOTIFY_ID, notification.build());
+
+            String responseJson = doPOST(url);
+
+            int responesecode = JSONUtils.getInt(responseJson, "code", -1);
+            if (responesecode == 0) {
+                JSONObject dataObject = JSONUtils.getJSONObject(responseJson, "data", null);
+                StringBuilder showString = new StringBuilder();
+                showString.append(formatTime()).append("\n\n");
+                showString.append(dataObject.toString());
+                int jsonObject_prodRemainingStock = dataObject.getInt("prodRemainingStock");
+                String jsonObject_activeButtonName = dataObject.getString("activeButtonName");
+                Logger.debug("jsonObject_prodRemainingStock " + jsonObject_prodRemainingStock);
+                Logger.debug("jsonObject_activeButtonName " + jsonObject_activeButtonName);
+
+                String shuliang = "0";
+                String guanjian = "";
+                if (tvGuanjianzi == null || tvGuanjianzi.toString().isEmpty()) {
+                    guanjian = "";
+                } else {
+                    guanjian = tvGuanjianzi.getText().toString();
+                }
+
+                if (tvShuliang == null || tvShuliang.toString().isEmpty()) {
+                    shuliang = "0";
+                } else {
+                    shuliang = tvShuliang.getText().toString();
+                    if (shuliang.isEmpty()) {
+                        shuliang = "0";
+                    }
+                }
+
+                if (jsonObject_prodRemainingStock > Integer.parseInt(shuliang) || !jsonObject_activeButtonName.equals("已售罄")) {
+                    if (tvserverjiang != null && tvserverjiang.length() > 10) {
+                        Logger.debug("response  serverjiang != null");
+                        String serverjiangkey = tvserverjiang.getText().toString();
+
+                        if (!guanjian.isEmpty()) {
+                            sendNotify("https://sc.ftqq.com/" + serverjiangkey + ".send?text=" + jsonObject_activeButtonName + ",数量:" + jsonObject_prodRemainingStock + "..." + formatTime());
+                        }
+                    } else {
+                        notification.setContentText("有货了!! = " + jsonObject_activeButtonName + "," + jsonObject_prodRemainingStock);
+                        //设置发送时间
+                        notification.setWhen(System.currentTimeMillis());
+                        notificationManager.notify(NOTIFY_ID, notification.build());
+                        Logger.debug(".obtainMessage(4)");
+                        handler.obtainMessage(4).sendToTarget();
+                    }
+                } else {
+                    showString.append("还不够呢\n");
+                }
+                handler.obtainMessage(1, showString).sendToTarget();
+                handler.obtainMessage(2).sendToTarget();
+            } else {
+                handler.obtainMessage(3, "code != 0 出错了呀").sendToTarget();
+
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            handler.obtainMessage(3, "完了完了 出错了呀").sendToTarget();
+        }
+    }
+
+
     int tempNotify = 0;
 
-    public void getData(String url) {
+    public void getDataByGET(String url) {
         HttpGet httpGet = new HttpGet(url);
         CloseableHttpClient httpClient = HttpClients.createDefault();
         String timestamp = System.currentTimeMillis() + "";
@@ -178,17 +374,19 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }
 
                 if (tvShuliang == null || tvShuliang.toString().isEmpty()) {
-                    shuli = "1";
+                    shuli = "0";
+                    tvShuliang.setText("0");
                 } else {
                     shuli = tvShuliang.getText().toString();
                     if (shuli.isEmpty()) {
-                        shuli = "1";
+                        shuli = "0";
+                        tvShuliang.setText("0");
                     }
                 }
 
 
                 if (name.contains(guanjian)) {
-                    if(guanjian.length()>1){
+                    if (guanjian.length() > 1) {
                         if (Integer.parseInt(remain_num) > Integer.parseInt(shuli)) {
                             if (tempNotify != Integer.parseInt(remain_num)) {
                                 if (tvserverjiang != null && tvserverjiang.length() > 10) {
@@ -294,6 +492,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
         }
     }
+
     public TelephonyManager telephoneManager;
     public PhoneStateListener phoneStateListener;
 
