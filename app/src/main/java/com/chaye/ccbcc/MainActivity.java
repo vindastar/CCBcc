@@ -5,6 +5,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.NotificationCompat;
 
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -12,6 +13,7 @@ import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.BitmapFactory;
 import android.media.MediaPlayer;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -20,9 +22,11 @@ import android.telephony.ServiceState;
 import android.telephony.SignalStrength;
 import android.telephony.TelephonyManager;
 import android.text.method.ScrollingMovementMethod;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.android.common.utils.JSONUtils;
 
@@ -53,6 +57,7 @@ import java.util.TimerTask;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
+    private static final String TAG = "MainActivity";
     private TextView textViewData, tvserverjiang, tvGuanjianzi, tvShuliang, tvJiange;
     private Button buttonStart, buttonStop;
     private final int NOTIFY_ID = 0x123;            //通知的ID
@@ -61,10 +66,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     MediaPlayer mMediaPlayer;
     AssetFileDescriptor afd;
 
+    Context context;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        context = this;
         textViewData = findViewById(R.id.textViewData);
         textViewData.setMovementMethod(ScrollingMovementMethod.getInstance());
         tvJiange = findViewById(R.id.jiange);
@@ -84,30 +92,25 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             e.printStackTrace();
         }
 
-        //获取通知管理器，用于发送通知
+        String CHANEL_ID = "my_channel_01";
+        String CHANEL_NAME = "我是渠道名字8.0need";
         notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        notification = new NotificationCompat.Builder(MainActivity.this); // 创建一个Notification对象
-        // 设置打开该通知，该通知自动消失
-        notification.setAutoCancel(false);
-//         设置显示在状态栏的通知提示信息
-//        notification.setTicker("subtitle");
-        // 设置通知的小图标
-        notification.setSmallIcon(R.mipmap.ic_launcher);
-        //设置下拉列表中的大图标
-        notification.setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher));
-        // 设置通知内容的标题
-        notification.setContentTitle("普大喜奔日上");
-        // 设置通知内容
-        notification.setContentText("正在监控中");
-        //设置发送时间
-        notification.setWhen(System.currentTimeMillis());
-        // 创建一个启动其他Activity的Intent
-//        Intent intent = new Intent(MainActivity.this, MainActivity.class);
-//        PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 0, intent, 0);
-        //设置通知栏点击跳转
-//        notification.setContentIntent(pi);
-        //发送通知
-        notificationManager.notify(NOTIFY_ID, notification.build());
+        //Android 8.0开始要设置通知渠道
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(CHANEL_ID, CHANEL_NAME, NotificationManager.IMPORTANCE_DEFAULT);
+            notificationManager.createNotificationChannel(channel);
+        }
+
+        //创建通知
+        notification = new NotificationCompat.Builder(context, CHANEL_ID)
+                .setContentTitle("普大喜奔日上")
+                .setContentText("正在监控中")
+                .setWhen(System.currentTimeMillis())
+                .setSmallIcon(R.drawable.ic_launcher_background)
+                .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher));
+//                .setOngoing(true)
+//                .setAutoCancel(true);
+//        notificationManager.notify(NOTIFY_ID, notification.build());
     }
 
     boolean isRun;
@@ -246,7 +249,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             rs = sb.toString();
         } catch (Exception e) {
             e.printStackTrace();
-            // TODO: handle exception
         } finally {
             if (reader != null) {
                 reader.close();
