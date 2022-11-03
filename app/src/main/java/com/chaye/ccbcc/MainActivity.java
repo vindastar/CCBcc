@@ -104,13 +104,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         //创建通知
         notification = new NotificationCompat.Builder(context, CHANEL_ID)
                 .setContentTitle("普大喜奔日上")
-                .setContentText("正在监控中")
+                .setContentText("点击开始按钮触发监控")
                 .setWhen(System.currentTimeMillis())
                 .setSmallIcon(R.drawable.ic_launcher_background)
                 .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher));
 //                .setOngoing(true)
 //                .setAutoCancel(true);
-//        notificationManager.notify(NOTIFY_ID, notification.build());
+        notificationManager.notify(NOTIFY_ID, notification.build());
     }
 
     boolean isRun;
@@ -273,13 +273,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         try {
 //            CloseableHttpResponse response = httpClient.execute(httpPost);
 //            String responseJson = EntityUtils.toString(response.getEntity(), Charset.defaultCharset());
-            notification.setContentText("正在监控中");
-            //设置发送时间
-            notification.setWhen(System.currentTimeMillis());
-            notificationManager.notify(NOTIFY_ID, notification.build());
-
             String responseJson = doPOST(url);
-
             int responesecode = JSONUtils.getInt(responseJson, "code", -1);
             if (responesecode == 0) {
                 JSONObject dataObject = JSONUtils.getJSONObject(responseJson, "data", null);
@@ -482,15 +476,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 isRun = true;
                 tvserverjiang.setHint("不填写的话没有实时推送");
                 startGetdata();
+                notification.setContentText("正在监控中");
+                notification.setWhen(System.currentTimeMillis());
+                notificationManager.notify(NOTIFY_ID, notification.build());
                 buttonStart.setVisibility(View.GONE);
                 buttonStop.setVisibility(View.VISIBLE);
                 listenerSignal(this);
                 break;
             case R.id.buttonStop:
                 isRun = false;
-
                 buttonStart.setVisibility(View.VISIBLE);
                 buttonStop.setVisibility(View.GONE);
+                notification.setContentText("已停止.点击开始按钮触发监控");
+                notification.setWhen(System.currentTimeMillis());
+                notificationManager.notify(NOTIFY_ID, notification.build());
+
                 break;
         }
     }
